@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV Viewer, Filter & Save Tool</title>
+  <!-- PapaParse for robust CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --border: #e2e8f0;
+      --table-stripe: #f8fafc;
+      --saved-highlight: #ecfdf5;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1250px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    header p { color: var(--text-muted); font-size: 0.95rem; }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .card-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .card-title-row h2 { font-size: 1.2rem; }
+
+    /* Upload Area */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary);
+      background: #eff6ff;
+    }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-zone p { color: var(--text-muted); margin-top: 0.5rem; font-size: 0.9rem; }
+
+    /* Filters Section */
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .filter-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-logic-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .filter-logic-controls label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .filter-logic-select {
+      width: auto !important;
+      padding: 0.4rem 0.6rem !important;
+      font-size: 0.85rem !important;
+      font-weight: 600;
+      background: white;
+    }
+
+    .filter-rows-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.5fr auto;
+      gap: 0.75rem;
+      align-items: flex-end;
+      background: #f8fafc;
+      padding: 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .filter-row:hover {
+      border-color: #cbd5e1;
+    }
+
+    @media (max-width: 768px) {
+      .filter-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .filter-group { display: flex; flex-direction: column; gap: 0.35rem; width: 100%; }
+    .filter-group label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+    
+    input[type="text"], select {
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #e2e8f0; color: var(--text); }
+    .btn-secondary:hover { background: #cbd5e1; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: var(--danger-hover); }
+
+    .btn-sm {
+      padding: 0.45rem 0.65rem;
+      font-size: 0.8rem;
+      border-radius: 6px;
+    }
+    .btn-saved {
+      background: var(--success);
+      color: white;
+    }
+
+    /* Table & Sortable Headers */
+    .table-container {
+      overflow-x: auto;
+      max-height: 480px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      text-align: left;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #f1f5f9;
+      color: var(--text);
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
+    }
+    thead th.sortable {
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+    thead th.sortable:hover {
+      background: #e2e8f0;
+    }
+    .sort-icon {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    thead th.sorted .sort-icon {
+      color: var(--primary);
+      font-weight: bold;
+    }
+    tbody td {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr:nth-child(even) { background-color: var(--table-stripe); }
+    tbody tr:hover { background-color: #f1f5f9; }
+
+    tbody tr.is-saved {
+      background-color: var(--saved-highlight) !important;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .page-controls { display: flex; gap: 0.5rem; align-items: center; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>CSV Viewer, Filter & Save Tool</h1>
+    <p>Upload a CSV, build custom multi-tier filters, and save records into your selection table below.</p>
+  </header>
+
+  <!-- Upload Area -->
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <strong>Click to browse or drag & drop a CSV file here</strong>
+      <p id="fileInfo">No file selected yet (.csv)</p>
+      <input type="file" id="fileInput" accept=".csv" />
+    </div>
+  </div>
+
+  <!-- Filter & Actions Controls -->
+  <div class="card hidden" id="controlsCard">
+    <div class="filter-section">
+      <!-- Global Search -->
+      <div class="filter-group">
+        <label for="globalSearch">Search Everything (All Columns)</label>
+        <input type="text" id="globalSearch" placeholder="Type to search anywhere across all records..." />
+      </div>
+
+      <!-- Filter Controls Header -->
+      <div class="filter-top-bar">
+        <div class="filter-logic-controls">
+          <label for="filterLogic">Match Mode:</label>
+          <select id="filterLogic" class="filter-logic-select">
+            <option value="AND">Match ALL Rules (AND - Refine)</option>
+            <option value="OR">Match ANY Rule (OR - Broaden)</option>
+          </select>
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-sm" id="addFilterRowBtn">
+          + Add Filter Rule
+        </button>
+      </div>
+
+      <!-- Dynamic Filter Rows Container -->
+      <div class="filter-rows-container" id="filterRowsContainer"></div>
+    </div>
+
+    <div class="btn-row">
+      <div>
+        <button class="btn btn-secondary" id="resetBtn">Reset Filters & Sort</button>
+      </div>
+      <div>
+        <button class="btn" id="exportBtn">Export Filtered CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Output Table Area -->
+  <div class="card hidden" id="outputCard">
+    <div class="card-title-row">
+      <h2>All Records</h2>
+      <small style="color: var(--text-muted)">Click anywhere on a row or click <strong>+ Save</strong> to pin it below</small>
+    </div>
+    <div class="table-container">
+      <table id="dataTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination & Stats -->
+    <div class="pagination">
+      <span id="recordCount">Showing 0 of 0 records</span>
+      <div class="page-controls">
+        <button class="btn btn-secondary" id="prevPageBtn">&larr; Prev</button>
+        <span id="pageIndicator">Page 1</span>
+        <button class="btn btn-secondary" id="nextPageBtn">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Secondary / Saved Rows Table Area -->
+  <div class="card hidden" id="savedCard">
+    <div class="card-title-row">
+      <div>
+        <h2>Saved Records (<span id="savedCount">0</span>)</h2>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="clearSavedBtn">Clear All Saved</button>
+        <button class="btn btn-sm" id="exportSavedBtn">Export Saved CSV</button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table id="savedTable">
+        <thead id="savedTableHead"></thead>
+        <tbody id="savedTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // State
+  let rawData = [];
+  let filteredData = [];
+  let headers = [];
+  let savedRows = [];
+  let currentPage = 1;
+  const rowsPerPage = 50;
+
+  // Sorting State
+  let sortColumn = null;
+  let sortDirection = "asc";
+
+  // Dynamic Rule Tracking
+  let ruleCounter = 0;
+  let activeRuleIds = [];
+
+  // DOM Elements
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+  const fileInfo = document.getElementById("fileInfo");
+  const controlsCard = document.getElementById("controlsCard");
+  const outputCard = document.getElementById("outputCard");
+  const savedCard = document.getElementById("savedCard");
+
+  const globalSearch = document.getElementById("globalSearch");
+  const filterLogic = document.getElementById("filterLogic");
+  const filterRowsContainer = document.getElementById("filterRowsContainer");
+  const addFilterRowBtn = document.getElementById("addFilterRowBtn");
+
+  const resetBtn = document.getElementById("resetBtn");
+  const exportBtn = document.getElementById("exportBtn");
+
+  const tableHead = document.getElementById("tableHead");
+  const tableBody = document.getElementById("tableBody");
+  const recordCount = document.getElementById("recordCount");
+  const pageIndicator = document.getElementById("pageIndicator");
+  const prevPageBtn = document.getElementById("prevPageBtn");
+  const nextPageBtn = document.getElementById("nextPageBtn");
+
+  const savedTableHead = document.getElementById("savedTableHead");
+  const savedTableBody = document.getElementById("savedTableBody");
+  const savedCount = document.getElementById("savedCount");
+  const clearSavedBtn = document.getElementById("clearSavedBtn");
+  const exportSavedBtn = document.getElementById("exportSavedBtn");
+
+  // File Upload Handlers
+  dropZone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file.name.endsWith(".csv")) {
+      alert("Please upload a valid .csv file.");
+      return;
+    }
+    fileInfo.textContent = `Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+      complete: function (results) {
+        if (!results.data || results.data.length === 0) {
+          alert("The CSV appears to be empty.");
+          return;
+        }
+
+        rawData = results.data.map((row, idx) => ({ ...row, __uniqueId: idx }));
+        headers = results.meta.fields || Object.keys(results.data[0]);
+
+        sortColumn = null;
+        sortDirection = "asc";
+        savedRows = [];
+
+        // Clear existing dynamic filter rows
+        filterRowsContainer.innerHTML = "";
+        activeRuleIds = [];
+        ruleCounter = 0;
+
+        // Add initial filter row
+        createFilterRow();
+
+        // Reveal Cards
+        controlsCard.classList.remove("hidden");
+        outputCard.classList.remove("hidden");
+        savedCard.classList.remove("hidden");
+
+        applyFilters();
+        renderSavedTable();
+      },
+      error: function (err) {
+        alert("Error parsing CSV: " + err.message);
+      }
+    });
+  }
+
+  // Determines if a column is predominantly numeric
+  function isNumericColumn(colName) {
+    if (!colName) return false;
+    let numericCount = 0;
+    let totalCount = 0;
+
+    for (let i = 0; i < rawData.length; i++) {
+      const rawVal = rawData[i][colName];
+      if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== "") {
+        totalCount++;
+        const cleaned = String(rawVal).trim().replace(/,/g, "");
+        if (!isNaN(Number(cleaned))) {
+          numericCount++;
+        }
+      }
+    }
+
+    if (totalCount === 0) return false;
+    return numericCount / totalCount >= 0.85;
+  }
+
+  // Creates a dynamic filter row
+  function createFilterRow() {
+    const id = ++ruleCounter;
+    activeRuleIds.push(id);
+
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "filter-row";
+    rowDiv.id = `filterRow_${id}`;
+
+    rowDiv.innerHTML = `
+      <div class="filter-group">
+        <label for="filterCol_${id}">Column</label>
+        <select id="filterCol_${id}">
+          <option value="">-- Choose Column --</option>
+          ${headers.map((h) => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filterOp_${id}">Operator</label>
+        <select id="filterOp_${id}">
+          <option value="contains">Contains</option>
+          <option value="equals">Equals</option>
+          <option value="startsWith">Starts With</option>
+          <option value="greaterThan">Greater Than (&gt;)</option>
+          <option value="lessThan">Less Than (&lt;)</option>
+        </select>
+      </div>
+
+      <div class="filter-group" id="filterValContainer_${id}">
+        <label for="filterVal_${id}">Column Value</label>
+        <input type="text" id="filterVal_${id}" placeholder="Filter value..." />
+      </div>
+
+      <div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeFilterRow(${id})" title="Remove this rule">
+          ✕ Remove
+        </button>
+      </div>
+    `;
+
+    filterRowsContainer.appendChild(rowDiv);
+
+    // Attach row events
+    const colSelect = document.getElementById(`filterCol_${id}`);
+    const opSelect = document.getElementById(`filterOp_${id}`);
+    const valInput = document.getElementById(`filterVal_${id}`);
+
+    colSelect.addEventListener("change", () => {
+      updateRuleValueControl(id);
+      applyFilters();
+    });
+    opSelect.addEventListener("change", applyFilters);
+    valInput.addEventListener("input", applyFilters);
+  }
+
+  // Removes a dynamic filter row
+  function removeFilterRow(id) {
+    activeRuleIds = activeRuleIds.filter((rId) => rId !== id);
+    const rowEl = document.getElementById(`filterRow_${id}`);
+    if (rowEl) rowEl.remove();
+    applyFilters();
+  }
+
+  // Resets a specific row's value control to an input box
+  function resetRuleValueControl(id) {
+    const container = document.getElementById(`filterValContainer_${id}`);
+    if (!container) return;
+    container.innerHTML = `
+      <label for="filterVal_${id}">Column Value</label>
+      <input type="text" id="filterVal_${id}" placeholder="Filter value..." />
+    `;
+    document.getElementById(`filterVal_${id}`).addEventListener("input", applyFilters);
+  }
+
+  // Updates the value input for a given rule based on whether the column is text or numeric
+  function updateRuleValueControl(id) {
+    const colSelect = document.getElementById(`filterCol_${id}`);
+    const container = document.getElementById(`filterValContainer_${id}`);
+    if (!colSelect || !container) return;
+
+    const col = colSelect.value;
+    if (!col) {
+      resetRuleValueControl(id);
+      return;
+    }
+
+    const isNumeric = isNumericColumn(col);
+
+    if (isNumeric) {
+      // Keep input for numeric columns
+      resetRuleValueControl(id);
+      const input = document.getElementById(`filterVal_${id}`);
+      input.placeholder = "Enter numeric value (e.g. 100)...";
+    } else {
+      // Column is string/text: produce discrete selectable choices
+      const uniqueValuesSet = new Set();
+      rawData.forEach((row) => {
+        const val = row[col];
+        if (val !== undefined && val !== null && String(val).trim() !== "") {
+          uniqueValuesSet.add(String(val).trim());
+        }
+      });
+
+      const uniqueValues = Array.from(uniqueValuesSet).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" })
+      );
+
+      container.innerHTML = `
+        <label for="filterVal_${id}">Column Value (${uniqueValues.length} choices)</label>
+        <select id="filterVal_${id}">
+          <option value="">-- Choose Discrete Value --</option>
+          ${uniqueValues.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
+        </select>
+      `;
+
+      const select = document.getElementById(`filterVal_${id}`);
+      select.addEventListener("change", applyFilters);
+    }
+  }
+
+  // Helper to evaluate a row against a single active rule object
+  function evaluateRule(row, rule) {
+    const rowVal = (row[rule.col] ?? "").toString().toLowerCase();
+    const targetVal = rule.val.toLowerCase();
+
+    if (rule.op === "contains") return rowVal.includes(targetVal);
+    if (rule.op === "equals") return rowVal === targetVal;
+    if (rule.op === "startsWith") return rowVal.startsWith(targetVal);
+    if (rule.op === "greaterThan") return parseFloat(rowVal) > parseFloat(targetVal);
+    if (rule.op === "lessThan") return parseFloat(rowVal) < parseFloat(targetVal);
+    return true;
+  }
+
+  // Main Filter & Sort Engine
+  function applyFilters() {
+    const searchVal = globalSearch.value.trim().toLowerCase();
+    const logic = filterLogic.value;
+
+    // Collect all valid/active rules
+    const activeRules = activeRuleIds
+      .map((id) => {
+        const colEl = document.getElementById(`filterCol_${id}`);
+        const opEl = document.getElementById(`filterOp_${id}`);
+        const valEl = document.getElementById(`filterVal_${id}`);
+        return {
+          col: colEl ? colEl.value : "",
+          op: opEl ? opEl.value : "contains",
+          val: valEl ? valEl.value.trim() : ""
+        };
+      })
+      .filter((rule) => rule.col !== "" && rule.val !== "");
+
+    // 1. Filter
+    filteredData = rawData.filter((row) => {
+      // Global Search Check
+      if (searchVal) {
+        const matchesGlobal = headers.some((h) => {
+          const val = (row[h] || "").toString().toLowerCase();
+          return val.includes(searchVal);
+        });
+        if (!matchesGlobal) return false;
+      }
+
+      // Dynamic Filter Rules Check
+      if (activeRules.length > 0) {
+        if (logic === "AND") {
+          return activeRules.every((rule) => evaluateRule(row, rule));
+        } else {
+          return activeRules.some((rule) => evaluateRule(row, rule));
+        }
+      }
+
+      return true;
+    });
+
+    // 2. Sort
+    if (sortColumn) {
+      filteredData.sort((a, b) => {
+        let valA = a[sortColumn] ?? "";
+        let valB = b[sortColumn] ?? "";
+
+        if (valA === "" && valB !== "") return 1;
+        if (valB === "" && valA !== "") return -1;
+        if (valA === "" && valB === "") return 0;
+
+        const numA = parseFloat(valA);
+        const numB = parseFloat(valB);
+        const isNumeric = !isNaN(numA) && !isNaN(numB) && !isNaN(valA) && !isNaN(valB);
+
+        let comparison = isNumeric
+          ? numA - numB
+          : String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: "base" });
+
+        return sortDirection === "asc" ? comparison : -comparison;
+      });
+    }
+
+    currentPage = 1;
+    renderTable();
+  }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      sortColumn = column;
+      sortDirection = "asc";
+    }
+    applyFilters();
+  }
+
+  // Row Selection / Saving Handlers
+  function toggleSaveRow(rowId) {
+    const existingIndex = savedRows.findIndex((r) => r.__uniqueId === rowId);
+    if (existingIndex > -1) {
+      savedRows.splice(existingIndex, 1);
+    } else {
+      const targetRow = rawData.find((r) => r.__uniqueId === rowId);
+      if (targetRow) savedRows.push(targetRow);
+    }
+
+    renderTable();
+    renderSavedTable();
+  }
+
+  function removeSavedRow(rowId) {
+    savedRows = savedRows.filter((r) => r.__uniqueId !== rowId);
+    renderTable();
+    renderSavedTable();
+  }
+
+  // Render Main Table
+  function renderTable() {
+    tableHead.innerHTML = `<tr>
+      <th style="width: 80px; text-align: center;">Action</th>
+      ${headers
+        .map((h) => {
+          const isSorted = sortColumn === h;
+          let icon = "&#x21C5;";
+          if (isSorted) {
+            icon = sortDirection === "asc" ? "&#x25B2;" : "&#x25BC;";
+          }
+          return `
+            <th class="sortable ${isSorted ? "sorted" : ""}" onclick="handleSort('${escapeJs(h)}')">
+              ${escapeHtml(h)}
+              <span class="sort-icon">${icon}</span>
+            </th>`;
+        })
+        .join("")}
+    </tr>`;
+
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const paginatedRows = filteredData.slice(startIndex, startIndex + rowsPerPage);
+
+    if (paginatedRows.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="${headers.length + 1}" style="text-align: center; color: var(--text-muted); padding: 2rem;">No matching records found.</td></tr>`;
+    } else {
+      tableBody.innerHTML = paginatedRows
+        .map((row) => {
+          const isSaved = savedRows.some((r) => r.__uniqueId === row.__uniqueId);
+          return `
+            <tr class="${isSaved ? "is-saved" : ""}" onclick="toggleSaveRow(${row.__uniqueId})" style="cursor: pointer;">
+              <td style="text-align: center;" onclick="event.stopPropagation()">
+                <button 
+                  class="btn btn-sm ${isSaved ? "btn-saved" : "btn-secondary"}" 
+                  onclick="toggleSaveRow(${row.__uniqueId})">
+                  ${isSaved ? "✓ Saved" : "+ Save"}
+                </button>
+              </td>
+              ${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}
+            </tr>`;
+        })
+        .join("");
+    }
+
+    const totalPages = Math.ceil(filteredData.length / rowsPerPage) || 1;
+    recordCount.textContent = `Showing ${filteredData.length === 0 ? 0 : startIndex + 1} to ${Math.min(
+      startIndex + rowsPerPage,
+      filteredData.length
+    )} of ${filteredData.length} records (Total: ${rawData.length})`;
+
+    pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
+  }
+
+  // Render Saved Rows Table
+  function renderSavedTable() {
+    savedCount.textContent = savedRows.length;
+
+    savedTableHead.innerHTML = `<tr>
+      <th style="width: 80px; text-align: center;">Action</th>
+      ${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}
+    </tr>`;
+
+    if (savedRows.length === 0) {
+      savedTableBody.innerHTML = `<tr><td colspan="${headers.length + 1}" style="text-align: center; color: var(--text-muted); padding: 2rem;">No rows saved yet. Click on any row above to temporarily pin it here.</td></tr>`;
+    } else {
+      savedTableBody.innerHTML = savedRows
+        .map(
+          (row) => `
+          <tr>
+            <td style="text-align: center;">
+              <button class="btn btn-sm btn-danger" onclick="removeSavedRow(${row.__uniqueId})">Remove</button>
+            </td>
+            ${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}
+          </tr>`
+        )
+        .join("");
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function escapeJs(str) {
+    return String(str).replace(/'/g, "\\'");
+  }
+
+  // Static Controls Listeners
+  globalSearch.addEventListener("input", applyFilters);
+  filterLogic.addEventListener("change", applyFilters);
+  addFilterRowBtn.addEventListener("click", () => createFilterRow());
+
+  resetBtn.addEventListener("click", () => {
+    globalSearch.value = "";
+    filterLogic.value = "AND";
+
+    // Reset back to one clean filter row
+    filterRowsContainer.innerHTML = "";
+    activeRuleIds = [];
+    ruleCounter = 0;
+    createFilterRow();
+
+    sortColumn = null;
+    sortDirection = "asc";
+    applyFilters();
+  });
+
+  clearSavedBtn.addEventListener("click", () => {
+    if (savedRows.length === 0) return;
+    if (confirm("Are you sure you want to clear all temporarily saved rows?")) {
+      savedRows = [];
+      renderTable();
+      renderSavedTable();
+    }
+  });
+
+  // Pagination navigation
+  prevPageBtn.addEventListener("click", () => {
+    if (currentPage > 1) {
+      currentPage--;
+      renderTable();
+    }
+  });
+
+  nextPageBtn.addEventListener("click", () => {
+    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    if (currentPage < totalPages) {
+      currentPage++;
+      renderTable();
+    }
+  });
+
+  // Export functions
+  function downloadCsv(data, filename) {
+    if (data.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+    const cleanData = data.map(({ __uniqueId, ...rest }) => rest);
+    const csvContent = Papa.unparse(cleanData);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  exportBtn.addEventListener("click", () => downloadCsv(filteredData, "filtered_results.csv"));
+  exportSavedBtn.addEventListener("click", () => downloadCsv(savedRows, "saved_selection.csv"));
+</script>
+</body>
+</html>
