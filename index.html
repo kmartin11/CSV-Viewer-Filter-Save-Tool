@@ -119,6 +119,8 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
     .card-title-row h2 { font-size: 1.2rem; }
 
@@ -259,7 +261,7 @@
       color: white;
     }
 
-    /* Table & Sortable Headers */
+    /* Table & Sortable/Draggable Headers */
     .table-container {
       overflow-x: auto;
       max-height: 480px;
@@ -283,13 +285,45 @@
       white-space: nowrap;
       user-select: none;
     }
-    thead th.sortable {
-      cursor: pointer;
-      transition: background-color 0.15s;
+
+    thead th.draggable-col {
+      cursor: grab;
+      transition: background-color 0.15s, box-shadow 0.15s;
     }
-    thead th.sortable:hover {
+    thead th.draggable-col:active {
+      cursor: grabbing;
+    }
+    thead th.draggable-col:hover {
       background: var(--th-hover);
     }
+    thead th.dragging {
+      opacity: 0.4;
+      background: var(--btn-secondary-hover) !important;
+    }
+
+    /* Visual drop indicator lines */
+    thead th.drag-over-left {
+      box-shadow: inset 4px 0 0 0 var(--primary) !important;
+    }
+    thead th.drag-over-right {
+      box-shadow: inset -4px 0 0 0 var(--primary) !important;
+    }
+
+    .col-drag-handle {
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      cursor: grab;
+      pointer-events: none;
+    }
+    thead th:hover .col-drag-handle {
+      color: var(--primary);
+    }
+    .col-title, .sort-icon {
+      pointer-events: none;
+    }
+
     .sort-icon {
       display: inline-block;
       margin-left: 6px;
@@ -333,7 +367,7 @@
     <div class="header-bar">
       <div>
         <h1>CSV Viewer, Filter & Save Tool</h1>
-        <p>Upload a CSV, build custom multi-tier filters, and save records into your selection table below.</p>
+        <p>Upload a CSV, drag column headers to reorder them, build custom multi-tier filters, and save records.</p>
       </div>
       <!-- Dark Mode Toggle Button -->
       <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle dark mode">
@@ -394,7 +428,9 @@
   <div class="card hidden" id="outputCard">
     <div class="card-title-row">
       <h2>All Records</h2>
-      <small style="color: var(--text-muted)">Click anywhere on a row or click <strong>+ Save</strong> to pin it below</small>
+      <small style="color: var(--text-muted)">
+        Drag headers <strong>&#8942;&#8942;</strong> left/right to reorder columns &bull; Click header to sort &bull; Click row or <strong>+ Save</strong> to pin below
+      </small>
     </div>
     <div class="table-container">
       <table id="dataTable">
@@ -480,6 +516,10 @@
   // Dynamic Rule Tracking
   let ruleCounter = 0;
   let activeRuleIds = [];
+
+  // Drag and drop column state
+  let draggedColIndex = null;
+  let dragOccurred = false;
 
   // DOM Elements
   const dropZone = document.getElementById("dropZone");
@@ -684,12 +724,10 @@
     const isNumeric = isNumericColumn(col);
 
     if (isNumeric) {
-      // Keep input for numeric columns
       resetRuleValueControl(id);
       const input = document.getElementById(`filterVal_${id}`);
       input.placeholder = "Enter numeric value (e.g. 100)...";
     } else {
-      // Column is string/text: produce discrete selectable choices
       const uniqueValuesSet = new Set();
       rawData.forEach((row) => {
         const val = row[col];
@@ -733,7 +771,6 @@
     const searchVal = globalSearch.value.trim().toLowerCase();
     const logic = filterLogic.value;
 
-    // Collect all valid/active rules
     const activeRules = activeRuleIds
       .map((id) => {
         const colEl = document.getElementById(`filterCol_${id}`);
@@ -749,7 +786,6 @@
 
     // 1. Filter
     filteredData = rawData.filter((row) => {
-      // Global Search Check
       if (searchVal) {
         const matchesGlobal = headers.some((h) => {
           const val = (row[h] || "").toString().toLowerCase();
@@ -758,7 +794,6 @@
         if (!matchesGlobal) return false;
       }
 
-      // Dynamic Filter Rules Check
       if (activeRules.length > 0) {
         if (logic === "AND") {
           return activeRules.every((rule) => evaluateRule(row, rule));
@@ -826,25 +861,118 @@
     renderSavedTable();
   }
 
+  // Column Reordering Logic
+  function moveHeader(fromIndex, toIndex, dropSide) {
+    if (fromIndex === toIndex) return;
+
+    let targetIndex = toIndex;
+    if (fromIndex < toIndex) {
+      targetIndex--;
+    }
+    if (dropSide === "right") {
+      targetIndex++;
+    }
+
+    if (fromIndex === targetIndex) return;
+
+    const [movedCol] = headers.splice(fromIndex, 1);
+    headers.splice(targetIndex, 0, movedCol);
+
+    renderTable();
+    renderSavedTable();
+  }
+
+  // Attach Drag & Drop Events to Table Headers
+  function attachHeaderDragEvents(thead, allowSort = false) {
+    const ths = thead.querySelectorAll("th.draggable-col");
+    ths.forEach((th) => {
+      th.addEventListener("dragstart", (e) => {
+        dragOccurred = true;
+        draggedColIndex = parseInt(th.dataset.colIndex, 10);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(draggedColIndex));
+        th.classList.add("dragging");
+      });
+
+      th.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = th.getBoundingClientRect();
+        const midpoint = rect.left + rect.width / 2;
+
+        th.classList.remove("drag-over-left", "drag-over-right");
+        if (e.clientX < midpoint) {
+          th.classList.add("drag-over-left");
+        } else {
+          th.classList.add("drag-over-right");
+        }
+      });
+
+      th.addEventListener("dragleave", () => {
+        th.classList.remove("drag-over-left", "drag-over-right");
+      });
+
+      th.addEventListener("drop", (e) => {
+        e.preventDefault();
+        th.classList.remove("drag-over-left", "drag-over-right");
+        const fromIdx = draggedColIndex !== null ? draggedColIndex : parseInt(e.dataTransfer.getData("text/plain"), 10);
+        const toIdx = parseInt(th.dataset.colIndex, 10);
+
+        if (!isNaN(fromIdx) && !isNaN(toIdx)) {
+          const rect = th.getBoundingClientRect();
+          const midpoint = rect.left + rect.width / 2;
+          const dropSide = e.clientX < midpoint ? "left" : "right";
+          moveHeader(fromIdx, toIdx, dropSide);
+        }
+      });
+
+      th.addEventListener("dragend", () => {
+        draggedColIndex = null;
+        document.querySelectorAll("th.draggable-col").forEach((el) => {
+          el.classList.remove("dragging", "drag-over-left", "drag-over-right");
+        });
+        // Prevent click sorting if a drag gesture took place
+        setTimeout(() => {
+          dragOccurred = false;
+        }, 50);
+      });
+
+      if (allowSort) {
+        th.addEventListener("click", () => {
+          if (dragOccurred) return;
+          const colName = th.dataset.colName;
+          if (colName) handleSort(colName);
+        });
+      }
+    });
+  }
+
   // Render Main Table
   function renderTable() {
     tableHead.innerHTML = `<tr>
       <th style="width: 80px; text-align: center;">Action</th>
       ${headers
-        .map((h) => {
+        .map((h, idx) => {
           const isSorted = sortColumn === h;
           let icon = "&#x21C5;";
           if (isSorted) {
             icon = sortDirection === "asc" ? "&#x25B2;" : "&#x25BC;";
           }
           return `
-            <th class="sortable ${isSorted ? "sorted" : ""}" onclick="handleSort('${escapeJs(h)}')">
-              ${escapeHtml(h)}
+            <th class="draggable-col sortable ${isSorted ? "sorted" : ""}" 
+                draggable="true" 
+                data-col-index="${idx}" 
+                data-col-name="${escapeHtml(h)}"
+                title="Drag to reorder &bull; Click to sort">
+              <span class="col-drag-handle">&#8942;&#8942;</span>
+              <span class="col-title">${escapeHtml(h)}</span>
               <span class="sort-icon">${icon}</span>
             </th>`;
         })
         .join("")}
     </tr>`;
+
+    attachHeaderDragEvents(tableHead, true);
 
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedRows = filteredData.slice(startIndex, startIndex + rowsPerPage);
@@ -887,8 +1015,22 @@
 
     savedTableHead.innerHTML = `<tr>
       <th style="width: 80px; text-align: center;">Action</th>
-      ${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}
+      ${headers
+        .map(
+          (h, idx) => `
+          <th class="draggable-col" 
+              draggable="true" 
+              data-col-index="${idx}" 
+              data-col-name="${escapeHtml(h)}"
+              title="Drag to reorder column">
+            <span class="col-drag-handle">&#8942;&#8942;</span>
+            <span class="col-title">${escapeHtml(h)}</span>
+          </th>`
+        )
+        .join("")}
     </tr>`;
+
+    attachHeaderDragEvents(savedTableHead, false);
 
     if (savedRows.length === 0) {
       savedTableBody.innerHTML = `<tr><td colspan="${headers.length + 1}" style="text-align: center; color: var(--text-muted); padding: 2rem;">No rows saved yet. Click on any row above to temporarily pin it here.</td></tr>`;
@@ -916,10 +1058,6 @@
       .replace(/'/g, "&#039;");
   }
 
-  function escapeJs(str) {
-    return String(str).replace(/'/g, "\\'");
-  }
-
   // Static Controls Listeners
   globalSearch.addEventListener("input", applyFilters);
   filterLogic.addEventListener("change", applyFilters);
@@ -929,7 +1067,6 @@
     globalSearch.value = "";
     filterLogic.value = "AND";
 
-    // Reset back to one clean filter row
     filterRowsContainer.innerHTML = "";
     activeRuleIds = [];
     ruleCounter = 0;
@@ -965,13 +1102,19 @@
     }
   });
 
-  // Export functions
+  // Export functions (maintains currently reordered columns)
   function downloadCsv(data, filename) {
     if (data.length === 0) {
       alert("No data available to export.");
       return;
     }
-    const cleanData = data.map(({ __uniqueId, ...rest }) => rest);
+    const cleanData = data.map((row) => {
+      const obj = {};
+      headers.forEach((h) => {
+        obj[h] = row[h] ?? "";
+      });
+      return obj;
+    });
     const csvContent = Papa.unparse(cleanData);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
