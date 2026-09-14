@@ -20,6 +20,39 @@
       --border: #e2e8f0;
       --table-stripe: #f8fafc;
       --saved-highlight: #ecfdf5;
+      --th-bg: #f1f5f9;
+      --th-hover: #e2e8f0;
+      --row-hover: #f1f5f9;
+      --drop-hover-bg: #eff6ff;
+      --btn-secondary-bg: #e2e8f0;
+      --btn-secondary-hover: #cbd5e1;
+      --input-bg: #ffffff;
+      --filter-row-bg: #f8fafc;
+      --filter-row-border-hover: #cbd5e1;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #60a5fa;
+      --success: #10b981;
+      --danger: #ef4444;
+      --danger-hover: #f87171;
+      --border: #334155;
+      --table-stripe: #172338;
+      --saved-highlight: #064e3b55;
+      --th-bg: #1e293b;
+      --th-hover: #334155;
+      --row-hover: #24344d;
+      --drop-hover-bg: rgba(59, 130, 246, 0.12);
+      --btn-secondary-bg: #334155;
+      --btn-secondary-hover: #475569;
+      --input-bg: #0f172a;
+      --filter-row-bg: #141f33;
+      --filter-row-border-hover: #475569;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,6 +61,7 @@
       background: var(--bg);
       color: var(--text);
       padding: 2rem 1rem;
+      transition: background-color 0.2s, color 0.2s;
     }
 
     .container {
@@ -38,8 +72,38 @@
       gap: 1.5rem;
     }
 
+    header .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
     header h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
     header p { color: var(--text-muted); font-size: 0.95rem; }
+
+    /* Theme Toggle Button */
+    .theme-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.9rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      user-select: none;
+      white-space: nowrap;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--primary);
+      background: var(--btn-secondary-bg);
+    }
 
     .card {
       background: var(--card-bg);
@@ -47,6 +111,7 @@
       border: 1px solid var(--border);
       padding: 1.5rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: background-color 0.2s, border-color 0.2s;
     }
 
     .card-title-row {
@@ -68,7 +133,7 @@
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--primary);
-      background: #eff6ff;
+      background: var(--drop-hover-bg);
     }
     .drop-zone input[type="file"] { display: none; }
     .drop-zone p { color: var(--text-muted); margin-top: 0.5rem; font-size: 0.9rem; }
@@ -107,7 +172,7 @@
       padding: 0.4rem 0.6rem !important;
       font-size: 0.85rem !important;
       font-weight: 600;
-      background: white;
+      background: var(--input-bg);
     }
 
     .filter-rows-container {
@@ -121,14 +186,14 @@
       grid-template-columns: 1fr 1fr 1.5fr auto;
       gap: 0.75rem;
       align-items: flex-end;
-      background: #f8fafc;
+      background: var(--filter-row-bg);
       padding: 0.85rem;
       border-radius: 8px;
       border: 1px solid var(--border);
       transition: border-color 0.2s;
     }
     .filter-row:hover {
-      border-color: #cbd5e1;
+      border-color: var(--filter-row-border-hover);
     }
 
     @media (max-width: 768px) {
@@ -141,12 +206,14 @@
     .filter-group label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
     
     input[type="text"], select {
+      background: var(--input-bg);
+      color: var(--text);
       padding: 0.6rem 0.75rem;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 0.9rem;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background-color 0.2s, color 0.2s;
       width: 100%;
     }
     input[type="text"]:focus, select:focus {
@@ -176,8 +243,9 @@
       gap: 0.35rem;
     }
     .btn:hover { background: var(--primary-hover); }
-    .btn-secondary { background: #e2e8f0; color: var(--text); }
-    .btn-secondary:hover { background: #cbd5e1; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: var(--btn-secondary-bg); color: var(--text); }
+    .btn-secondary:hover { background: var(--btn-secondary-hover); }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-danger:hover { background: var(--danger-hover); }
 
@@ -207,7 +275,7 @@
     thead th {
       position: sticky;
       top: 0;
-      background: #f1f5f9;
+      background: var(--th-bg);
       color: var(--text);
       font-weight: 600;
       padding: 0.75rem 1rem;
@@ -220,7 +288,7 @@
       transition: background-color 0.15s;
     }
     thead th.sortable:hover {
-      background: #e2e8f0;
+      background: var(--th-hover);
     }
     .sort-icon {
       display: inline-block;
@@ -238,7 +306,7 @@
       white-space: nowrap;
     }
     tbody tr:nth-child(even) { background-color: var(--table-stripe); }
-    tbody tr:hover { background-color: #f1f5f9; }
+    tbody tr:hover { background-color: var(--row-hover); }
 
     tbody tr.is-saved {
       background-color: var(--saved-highlight) !important;
@@ -262,8 +330,17 @@
 
 <div class="container">
   <header>
-    <h1>CSV Viewer, Filter & Save Tool</h1>
-    <p>Upload a CSV, build custom multi-tier filters, and save records into your selection table below.</p>
+    <div class="header-bar">
+      <div>
+        <h1>CSV Viewer, Filter & Save Tool</h1>
+        <p>Upload a CSV, build custom multi-tier filters, and save records into your selection table below.</p>
+      </div>
+      <!-- Dark Mode Toggle Button -->
+      <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle dark mode">
+        <span id="themeToggleIcon">🌙</span>
+        <span id="themeToggleText">Dark Mode</span>
+      </button>
+    </div>
   </header>
 
   <!-- Upload Area -->
@@ -359,6 +436,35 @@
 </div>
 
 <script>
+  // Theme Management
+  const themeToggleBtn = document.getElementById("themeToggleBtn");
+  const themeToggleIcon = document.getElementById("themeToggleIcon");
+  const themeToggleText = document.getElementById("themeToggleText");
+
+  function applyTheme(theme) {
+    if (theme === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggleIcon.textContent = "☀️";
+      themeToggleText.textContent = "Light Mode";
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      themeToggleIcon.textContent = "🌙";
+      themeToggleText.textContent = "Dark Mode";
+    }
+  }
+
+  // Check saved theme or system preference
+  const savedTheme = localStorage.getItem("app_theme");
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(savedTheme ? savedTheme : (prefersDark ? "dark" : "light"));
+
+  themeToggleBtn.addEventListener("click", () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const nextTheme = isDark ? "light" : "dark";
+    applyTheme(nextTheme);
+    localStorage.setItem("app_theme", nextTheme);
+  });
+
   // State
   let rawData = [];
   let filteredData = [];
