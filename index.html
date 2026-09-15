@@ -70,6 +70,12 @@
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      transition: max-width 0.25s ease;
+    }
+
+    /* Full width layout state */
+    .container.full-width {
+      max-width: 100%;
     }
 
     header .header-bar {
@@ -82,8 +88,15 @@
     header h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
     header p { color: var(--text-muted); font-size: 0.95rem; }
 
-    /* Theme Toggle Button */
-    .theme-toggle-btn {
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    /* Toggle Buttons */
+    .toggle-btn {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
@@ -100,7 +113,7 @@
       user-select: none;
       white-space: nowrap;
     }
-    .theme-toggle-btn:hover {
+    .toggle-btn:hover {
       border-color: var(--primary);
       background: var(--btn-secondary-bg);
     }
@@ -185,7 +198,7 @@
 
     .filter-row {
       display: grid;
-      grid-template-columns: 1fr 1fr 1.5fr auto;
+      grid-template-columns: 1fr 1fr 1.6fr auto;
       gap: 0.75rem;
       align-items: flex-end;
       background: var(--filter-row-bg);
@@ -201,6 +214,13 @@
     @media (max-width: 768px) {
       .filter-row {
         grid-template-columns: 1fr;
+      }
+      .filter-val-input-wrap {
+        flex-direction: column;
+      }
+      .filter-val-input-wrap select {
+        max-width: 100% !important;
+        width: 100% !important;
       }
     }
 
@@ -264,7 +284,7 @@
     /* Table & Sortable/Draggable Headers */
     .table-container {
       overflow-x: auto;
-      max-height: 480px;
+      max-height: 520px;
       border: 1px solid var(--border);
       border-radius: 6px;
     }
@@ -284,6 +304,7 @@
       border-bottom: 2px solid var(--border);
       white-space: nowrap;
       user-select: none;
+      z-index: 1;
     }
 
     thead th.draggable-col {
@@ -362,18 +383,26 @@
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="mainContainer">
   <header>
     <div class="header-bar">
       <div>
         <h1>CSV Viewer, Filter & Save Tool</h1>
         <p>Upload a CSV, drag column headers to reorder them, build custom multi-tier filters, and save records.</p>
       </div>
-      <!-- Dark Mode Toggle Button -->
-      <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle dark mode">
-        <span id="themeToggleIcon">🌙</span>
-        <span id="themeToggleText">Dark Mode</span>
-      </button>
+      <!-- Action Controls in Header -->
+      <div class="header-actions">
+        <!-- Width Toggle Button -->
+        <button type="button" class="toggle-btn" id="widthToggleBtn" aria-label="Toggle full width">
+          <span id="widthToggleIcon">↔️</span>
+          <span id="widthToggleText">Full Width</span>
+        </button>
+        <!-- Dark Mode Toggle Button -->
+        <button type="button" class="toggle-btn" id="themeToggleBtn" aria-label="Toggle dark mode">
+          <span id="themeToggleIcon">🌙</span>
+          <span id="themeToggleText">Dark Mode</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -489,7 +518,6 @@
     }
   }
 
-  // Check saved theme or system preference
   const savedTheme = localStorage.getItem("app_theme");
   const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   applyTheme(savedTheme ? savedTheme : (prefersDark ? "dark" : "light"));
@@ -499,6 +527,34 @@
     const nextTheme = isDark ? "light" : "dark";
     applyTheme(nextTheme);
     localStorage.setItem("app_theme", nextTheme);
+  });
+
+  // Width Toggle Management
+  const mainContainer = document.getElementById("mainContainer");
+  const widthToggleBtn = document.getElementById("widthToggleBtn");
+  const widthToggleIcon = document.getElementById("widthToggleIcon");
+  const widthToggleText = document.getElementById("widthToggleText");
+
+  function applyFullWidth(isFull) {
+    if (isFull) {
+      mainContainer.classList.add("full-width");
+      widthToggleIcon.textContent = "🗗";
+      widthToggleText.textContent = "Default Width";
+    } else {
+      mainContainer.classList.remove("full-width");
+      widthToggleIcon.textContent = "↔️";
+      widthToggleText.textContent = "Full Width";
+    }
+  }
+
+  const savedWidth = localStorage.getItem("app_full_width") === "true";
+  applyFullWidth(savedWidth);
+
+  widthToggleBtn.addEventListener("click", () => {
+    const isFull = mainContainer.classList.contains("full-width");
+    const nextState = !isFull;
+    applyFullWidth(nextState);
+    localStorage.setItem("app_full_width", String(nextState));
   });
 
   // State
@@ -613,27 +669,6 @@
     });
   }
 
-  // Determines if a column is predominantly numeric
-  function isNumericColumn(colName) {
-    if (!colName) return false;
-    let numericCount = 0;
-    let totalCount = 0;
-
-    for (let i = 0; i < rawData.length; i++) {
-      const rawVal = rawData[i][colName];
-      if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== "") {
-        totalCount++;
-        const cleaned = String(rawVal).trim().replace(/,/g, "");
-        if (!isNaN(Number(cleaned))) {
-          numericCount++;
-        }
-      }
-    }
-
-    if (totalCount === 0) return false;
-    return numericCount / totalCount >= 0.85;
-  }
-
   // Creates a dynamic filter row
   function createFilterRow() {
     const id = ++ruleCounter;
@@ -665,7 +700,7 @@
 
       <div class="filter-group" id="filterValContainer_${id}">
         <label for="filterVal_${id}">Column Value</label>
-        <input type="text" id="filterVal_${id}" placeholder="Filter value..." />
+        <input type="text" id="filterVal_${id}" placeholder="Type search string or #..." />
       </div>
 
       <div>
@@ -677,7 +712,6 @@
 
     filterRowsContainer.appendChild(rowDiv);
 
-    // Attach row events
     const colSelect = document.getElementById(`filterCol_${id}`);
     const opSelect = document.getElementById(`filterOp_${id}`);
     const valInput = document.getElementById(`filterVal_${id}`);
@@ -690,7 +724,6 @@
     valInput.addEventListener("input", applyFilters);
   }
 
-  // Removes a dynamic filter row
   function removeFilterRow(id) {
     activeRuleIds = activeRuleIds.filter((rId) => rId !== id);
     const rowEl = document.getElementById(`filterRow_${id}`);
@@ -698,71 +731,126 @@
     applyFilters();
   }
 
-  // Resets a specific row's value control to an input box
-  function resetRuleValueControl(id) {
-    const container = document.getElementById(`filterValContainer_${id}`);
-    if (!container) return;
-    container.innerHTML = `
-      <label for="filterVal_${id}">Column Value</label>
-      <input type="text" id="filterVal_${id}" placeholder="Filter value..." />
-    `;
-    document.getElementById(`filterVal_${id}`).addEventListener("input", applyFilters);
-  }
-
-  // Updates the value input for a given rule based on whether the column is text or numeric
+  // Updates the value input: Allows typing ANY string/number + gives datalist suggestions + provides a quick-pick dropdown
   function updateRuleValueControl(id) {
     const colSelect = document.getElementById(`filterCol_${id}`);
     const container = document.getElementById(`filterValContainer_${id}`);
     if (!colSelect || !container) return;
 
     const col = colSelect.value;
+    const currentVal = document.getElementById(`filterVal_${id}`)?.value || "";
+
     if (!col) {
-      resetRuleValueControl(id);
+      container.innerHTML = `
+        <label for="filterVal_${id}">Column Value</label>
+        <input type="text" id="filterVal_${id}" placeholder="Type search string or #..." value="${escapeHtml(currentVal)}" />
+      `;
+      document.getElementById(`filterVal_${id}`).addEventListener("input", applyFilters);
       return;
     }
 
-    const isNumeric = isNumericColumn(col);
+    // Collect distinct column values
+    const uniqueValuesSet = new Set();
+    for (let i = 0; i < rawData.length; i++) {
+      const val = rawData[i][col];
+      if (val !== undefined && val !== null && String(val).trim() !== "") {
+        uniqueValuesSet.add(String(val).trim());
+      }
+    }
 
-    if (isNumeric) {
-      resetRuleValueControl(id);
-      const input = document.getElementById(`filterVal_${id}`);
-      input.placeholder = "Enter numeric value (e.g. 100)...";
-    } else {
-      const uniqueValuesSet = new Set();
-      rawData.forEach((row) => {
-        const val = row[col];
-        if (val !== undefined && val !== null && String(val).trim() !== "") {
-          uniqueValuesSet.add(String(val).trim());
+    const uniqueValues = Array.from(uniqueValuesSet).sort((a, b) => {
+      const cleanA = a.replace(/,/g, "");
+      const cleanB = b.replace(/,/g, "");
+      const numA = Number(cleanA);
+      const numB = Number(cleanB);
+      if (!isNaN(numA) && !isNaN(numB) && cleanA !== "" && cleanB !== "") {
+        return numA - numB;
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    });
+
+    // Cap the rendered choices to 1,000 to keep UI ultra responsive
+    const maxOptions = 1000;
+    const displayedValues = uniqueValues.slice(0, maxOptions);
+    const optionsHtml = displayedValues
+      .map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)
+      .join("");
+    const datalistOptionsHtml = displayedValues
+      .map((v) => `<option value="${escapeHtml(v)}">`)
+      .join("");
+
+    const distinctLabel = uniqueValues.length > maxOptions 
+      ? `${maxOptions}+ choices` 
+      : `${uniqueValues.length} choices`;
+
+    container.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <label for="filterVal_${id}">Column Value</label>
+        <small style="color: var(--text-muted); font-size: 0.75rem;">${distinctLabel}</small>
+      </div>
+      <div class="filter-val-input-wrap" style="display: flex; gap: 0.4rem;">
+        <input 
+          type="text" 
+          id="filterVal_${id}" 
+          list="filterValList_${id}" 
+          placeholder="Type string/# or pick..." 
+          value="${escapeHtml(currentVal)}" 
+          autocomplete="off"
+          style="flex: 1; min-width: 0;"
+        />
+        <select id="filterValSelect_${id}" style="width: auto; max-width: 140px; flex-shrink: 0;" title="Or pick an existing value from column">
+          <option value="">-- Pick --</option>
+          ${optionsHtml}
+        </select>
+      </div>
+      <datalist id="filterValList_${id}">
+        ${datalistOptionsHtml}
+      </datalist>
+    `;
+
+    const input = document.getElementById(`filterVal_${id}`);
+    const select = document.getElementById(`filterValSelect_${id}`);
+
+    // If user types directly, apply filter and deselect the pick dropdown
+    input.addEventListener("input", () => {
+      if (select) select.value = "";
+      applyFilters();
+    });
+
+    // If user picks an option from the dropdown, fill the text input and filter
+    if (select) {
+      select.addEventListener("change", () => {
+        if (select.value !== "") {
+          input.value = select.value;
+          applyFilters();
         }
       });
-
-      const uniqueValues = Array.from(uniqueValuesSet).sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: "base" })
-      );
-
-      container.innerHTML = `
-        <label for="filterVal_${id}">Column Value (${uniqueValues.length} choices)</label>
-        <select id="filterVal_${id}">
-          <option value="">-- Choose Discrete Value --</option>
-          ${uniqueValues.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
-        </select>
-      `;
-
-      const select = document.getElementById(`filterVal_${id}`);
-      select.addEventListener("change", applyFilters);
     }
   }
 
-  // Helper to evaluate a row against a single active rule object
+  // Evaluates a row against a rule with support for both text and numeric searches
   function evaluateRule(row, rule) {
-    const rowVal = (row[rule.col] ?? "").toString().toLowerCase();
-    const targetVal = rule.val.toLowerCase();
+    const rawVal = row[rule.col] ?? "";
+    const rowStr = rawVal.toString().trim().toLowerCase();
+    const targetStr = rule.val.trim().toLowerCase();
 
-    if (rule.op === "contains") return rowVal.includes(targetVal);
-    if (rule.op === "equals") return rowVal === targetVal;
-    if (rule.op === "startsWith") return rowVal.startsWith(targetVal);
-    if (rule.op === "greaterThan") return parseFloat(rowVal) > parseFloat(targetVal);
-    if (rule.op === "lessThan") return parseFloat(rowVal) < parseFloat(targetVal);
+    if (rule.op === "contains") {
+      return rowStr.includes(targetStr);
+    }
+    if (rule.op === "equals") {
+      return rowStr === targetStr;
+    }
+    if (rule.op === "startsWith") {
+      return rowStr.startsWith(targetStr);
+    }
+    if (rule.op === "greaterThan" || rule.op === "lessThan") {
+      const numRow = parseFloat(String(rawVal).replace(/,/g, ""));
+      const numTarget = parseFloat(String(rule.val).replace(/,/g, ""));
+      if (!isNaN(numRow) && !isNaN(numTarget)) {
+        return rule.op === "greaterThan" ? numRow > numTarget : numRow < numTarget;
+      }
+      return rule.op === "greaterThan" ? rowStr > targetStr : rowStr < targetStr;
+    }
     return true;
   }
 
@@ -882,7 +970,6 @@
     renderSavedTable();
   }
 
-  // Attach Drag & Drop Events to Table Headers
   function attachHeaderDragEvents(thead, allowSort = false) {
     const ths = thead.querySelectorAll("th.draggable-col");
     ths.forEach((th) => {
@@ -931,7 +1018,6 @@
         document.querySelectorAll("th.draggable-col").forEach((el) => {
           el.classList.remove("dragging", "drag-over-left", "drag-over-right");
         });
-        // Prevent click sorting if a drag gesture took place
         setTimeout(() => {
           dragOccurred = false;
         }, 50);
@@ -1102,7 +1188,7 @@
     }
   });
 
-  // Export functions (maintains currently reordered columns)
+  // Export functions
   function downloadCsv(data, filename) {
     if (data.length === 0) {
       alert("No data available to export.");
