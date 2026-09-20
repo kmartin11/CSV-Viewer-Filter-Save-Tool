@@ -29,6 +29,8 @@
       --input-bg: #ffffff;
       --filter-row-bg: #f8fafc;
       --filter-row-border-hover: #cbd5e1;
+      --badge-bg: #e0e7ff;
+      --badge-text: #3730a3;
     }
 
     [data-theme="dark"] {
@@ -53,6 +55,8 @@
       --input-bg: #0f172a;
       --filter-row-bg: #141f33;
       --filter-row-border-hover: #475569;
+      --badge-bg: #312e81;
+      --badge-text: #c7d2fe;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -227,6 +231,17 @@
     .filter-group { display: flex; flex-direction: column; gap: 0.35rem; width: 100%; }
     .filter-group label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
     
+    .search-badge {
+      display: inline-block;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      text-transform: none;
+    }
+
     input[type="text"], select {
       background: var(--input-bg);
       color: var(--text);
@@ -388,7 +403,7 @@
     <div class="header-bar">
       <div>
         <h1>CSV Viewer, Filter & Save Tool</h1>
-        <p>Upload a CSV, drag column headers to reorder them, build custom multi-tier filters, and save records.</p>
+        <p>Upload a CSV, drag headers to reorder, run exact-match comma searches, build custom filter rules, and save records.</p>
       </div>
       <!-- Action Controls in Header -->
       <div class="header-actions">
@@ -418,10 +433,17 @@
   <!-- Filter & Actions Controls -->
   <div class="card hidden" id="controlsCard">
     <div class="filter-section">
-      <!-- Global Search -->
+      <!-- Global Search (Exact Matches, Comma-Separated) -->
       <div class="filter-group">
-        <label for="globalSearch">Search Everything (All Columns)</label>
-        <input type="text" id="globalSearch" placeholder="Type to search anywhere across all records..." />
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <label for="globalSearch">Search Everything (Exact Match across Any Column)</label>
+          <span id="searchTermsCount" class="search-badge hidden"></span>
+        </div>
+        <input 
+          type="text" 
+          id="globalSearch" 
+          placeholder="Paste or type exact values separated by comma (e.g. ID1, ID2, Apple)..." 
+        />
       </div>
 
       <!-- Filter Controls Header -->
@@ -586,6 +608,7 @@
   const savedCard = document.getElementById("savedCard");
 
   const globalSearch = document.getElementById("globalSearch");
+  const searchTermsCount = document.getElementById("searchTermsCount");
   const filterLogic = document.getElementById("filterLogic");
   const filterRowsContainer = document.getElementById("filterRowsContainer");
   const addFilterRowBtn = document.getElementById("addFilterRowBtn");
@@ -605,6 +628,29 @@
   const savedCount = document.getElementById("savedCount");
   const clearSavedBtn = document.getElementById("clearSavedBtn");
   const exportSavedBtn = document.getElementById("exportSavedBtn");
+
+  // Splits global search input by comma or newline, supporting quoted items
+  function parseSearchTerms(query) {
+    if (!query || !query.trim()) return [];
+
+    // If query contains quotes, parse respecting quotes
+    if (query.includes('"')) {
+      const terms = [];
+      const regex = /(?:^|[,\r\n]+)\s*(?:"([^"]*)"|([^,\r\n]+))\s*/g;
+      let match;
+      while ((match = regex.exec(query)) !== null) {
+        const val = (match[1] !== undefined ? match[1] : match[2] || "").trim().toLowerCase();
+        if (val) terms.push(val);
+      }
+      if (terms.length > 0) return terms;
+    }
+
+    // Default: split by commas or newlines
+    return query
+      .split(/[,\r\n]+/)
+      .map((term) => term.trim().toLowerCase())
+      .filter((term) => term.length > 0);
+  }
 
   // File Upload Handlers
   dropZone.addEventListener("click", () => fileInput.click());
@@ -856,7 +902,17 @@
 
   // Main Filter & Sort Engine
   function applyFilters() {
-    const searchVal = globalSearch.value.trim().toLowerCase();
+    const searchTerms = parseSearchTerms(globalSearch.value);
+    const searchTermsSet = new Set(searchTerms);
+    
+    // Update active search terms badge indicator
+    if (searchTerms.length > 0) {
+      searchTermsCount.textContent = `${searchTerms.length} exact ${searchTerms.length === 1 ? "term" : "terms"} active`;
+      searchTermsCount.classList.remove("hidden");
+    } else {
+      searchTermsCount.classList.add("hidden");
+    }
+
     const logic = filterLogic.value;
 
     const activeRules = activeRuleIds
@@ -874,14 +930,16 @@
 
     // 1. Filter
     filteredData = rawData.filter((row) => {
-      if (searchVal) {
+      // Global multi-search: Check if any column exactly EQUALS any search term (O(1) Set lookup)
+      if (searchTermsSet.size > 0) {
         const matchesGlobal = headers.some((h) => {
-          const val = (row[h] || "").toString().toLowerCase();
-          return val.includes(searchVal);
+          const val = (row[h] ?? "").toString().trim().toLowerCase();
+          return searchTermsSet.has(val);
         });
         if (!matchesGlobal) return false;
       }
 
+      // Column filter rules
       if (activeRules.length > 0) {
         if (logic === "AND") {
           return activeRules.every((rule) => evaluateRule(row, rule));
@@ -1151,6 +1209,7 @@
 
   resetBtn.addEventListener("click", () => {
     globalSearch.value = "";
+    searchTermsCount.classList.add("hidden");
     filterLogic.value = "AND";
 
     filterRowsContainer.innerHTML = "";
